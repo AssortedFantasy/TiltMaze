@@ -3,12 +3,27 @@ const ray = @cImport({
     @cInclude("raylib.h");
 });
 
+const screen_width = 800;
+const screen_height = 450;
+const fps = 60;
+
+fn print(str: []const u8) void {
+    std.debug.print("{s}", .{str});
+}
+
+
 pub fn main() !void {
-    const screen_width: usize = 800;
-    const screen_height: usize = 450;
 
     ray.InitWindow(screen_width, screen_height, "test");
-    std.time.sleep(1000000000*10);
+    ray.SetTargetFPS(fps);
+
+    while (!ray.WindowShouldClose()) {
+        ray.BeginDrawing();
+        ray.ClearBackground(ray.RAYWHITE);
+        ray.EndDrawing();
+    }
+    
+    print("Done!\n");
     ray.CloseWindow();
 }
 
