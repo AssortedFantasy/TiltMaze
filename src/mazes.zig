@@ -123,16 +123,54 @@ pub fn mazeify_graph(graph: Graph, algo: MazeAlgorithms, allocator: Allocator) !
     }
 }
 
-pub const Maze = struct {
-    width: usize,
+pub const SquareMaze = struct {
     height: usize,
+    width: usize,
+    graph: Graph,
+
+    const Self = @This();
+
+    pub fn init(allocator: Allocator, height: usize, width: usize) !Self {
+        // Degenerate mazes disallowed.
+        std.debug.assert(width > 0);
+        std.debug.assert(height > 0);
+
+        const graph = try Graph.init(allocator, @intCast(Graph.NodeType, width * height));
+        const square = Self{
+            .width = width,
+            .height = height,
+            .graph = graph,
+        };
+
+        // Connect things together.
+        for (0..height) |i| {
+            for (0..width) |j| {
+                // Adjacent to right and below, unless on right or bottom edges.
+                if (j + 1 != width) graph.make_adjacent(square.index(i, j), square.index(i, j + 1));
+                if (i + 1 != height) graph.make_adjacent(square.index(i, j), square.index(i + 1, j));
+            }
+        }
+
+        return square;
+    }
+
+    pub fn deinit(self: Self) void {
+        self.graph.deinit();
+    }
+
+    pub fn index(self: Self, row: usize, col: usize) Graph.NodeType {
+        std.debug.assert(col < self.width);
+        std.debug.assert(row < self.height);
+        return @intCast(Graph.NodeType, col + row * self.width);
+    }
 };
 
 // Algorithms for mazes.
 fn recursive_backtracker(graph: Graph, allocator: Allocator, random: rand.Random) !void {
-    _ = graph;
-    _ = allocator;
     _ = random;
+
+    var visited = try std.DynamicBitSet.initEmpty(allocator, graph.num_nodes);
+    defer visited.deinit();
 }
 
 test "Graph initialization" {
@@ -195,9 +233,11 @@ test "Graph adjacents and Edges" {
 test "Make Maze" {
     const allocator = testing.allocator;
 
-    const graph_size = 128;
-    const graph = try Graph.init(allocator, graph_size);
-    defer graph.deinit();
+    const width = 100;
+    const height = 99;
 
-    //mazeify_graph();
+    const maze = try SquareMaze.init(allocator, height, width);
+    defer maze.deinit();
+
+    try mazeify_graph(maze.graph, .Default, allocator);
 }
