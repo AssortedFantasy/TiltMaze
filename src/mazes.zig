@@ -167,10 +167,51 @@ pub const SquareMaze = struct {
 
 // Algorithms for mazes.
 fn recursive_backtracker(graph: Graph, allocator: Allocator, random: rand.Random) !void {
-    _ = random;
+    // Degenerate graph.
+    std.debug.assert(graph.num_nodes != 0);
 
     var visited = try std.DynamicBitSet.initEmpty(allocator, graph.num_nodes);
     defer visited.deinit();
+
+    // Rather than recursing completely, we allocate a stack so that we don't go overboard.
+    var stack = try std.ArrayList(Graph.NodeType).initCapacity(allocator, graph.num_nodes);
+    defer stack.deinit();
+
+    // Always start at 0, we could choose a starting point randomly but it doesn't really matter.
+    stack.appendAssumeCapacity(0);
+    // We have visited 0.
+    visited.set(0);
+
+    while (stack.getLastOrNull()) |visiting| {
+        // See if we have some unvisited adjacents.
+        const adjacents = graph.get_adjacents(visiting);
+
+        var unvisited_buff: [Graph.MAX_ADJACENTS]Graph.NodeType = undefined;
+        var num_unvisited: usize = 0;
+
+        for (adjacents) |adjacent| {
+            if (!visited.isSet(adjacent)) {
+                unvisited_buff[num_unvisited] = adjacent;
+                num_unvisited += 1;
+            }
+        }
+
+        if (num_unvisited > 0) {
+            // If we have an unvisited neighbour, then randomly pick one and recurse.
+            // While also carving an edge to it.
+            const next_visit = unvisited_buff[random.uintLessThan(usize, num_unvisited)];
+            graph.make_edges(visiting, next_visit);
+            stack.appendAssumeCapacity(next_visit);
+            visited.set(next_visit);
+        } else {
+            // Dead end, we must pop and repeat.
+            _ = stack.pop();
+        }
+    }
+
+    // For this to be a proper maze, there shouldn't be any unvisited nodes. If there are then we have a bug.
+    // Or the graph is disconnected because it is not a spanning tree.
+    std.debug.assert(visited.count() == visited.capacity());
 }
 
 test "Graph initialization" {
@@ -233,8 +274,8 @@ test "Graph adjacents and Edges" {
 test "Make Maze" {
     const allocator = testing.allocator;
 
-    const width = 100;
-    const height = 99;
+    const width = 127;
+    const height = 128;
 
     const maze = try SquareMaze.init(allocator, height, width);
     defer maze.deinit();
