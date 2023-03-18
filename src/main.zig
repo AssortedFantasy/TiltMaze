@@ -1,10 +1,12 @@
 const std = @import("std");
 const time = std.time;
-const ray = @cImport({
+const Allocator = std.mem.Allocator;
+const mazes = @import("mazes.zig");
+const raster = @import("raster.zig");
+
+pub const ray = @cImport({
     @cInclude("raylib.h");
 });
-const mazes = @import("mazes.zig");
-const Allocator = std.mem.Allocator;
 
 // Window Resolution
 const screen_width = 1280;
@@ -68,4 +70,5 @@ pub fn main() !void {
 
 test {
     _ = mazes;
+    _ = raster;
 }
