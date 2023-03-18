@@ -14,12 +14,29 @@ pub const rectangle = struct {
     top_left: ray.Vector2,
     bottom_right: ray.Vector2,
 
-    pub fn to_ray_rect(self: @This()) ray.Rectangle {
+    const Self = @This();
+
+    pub fn to_ray_rect(self: Self) ray.Rectangle {
         return .{
             .x = self.top_left.x,
             .y = self.top_left.y,
             .width = self.bottom_right.x - self.top_left.x,
             .height = self.top_left.y - self.bottom_right.y,
+        };
+    }
+
+    pub fn center(self: Self) ray.Vector2 {
+        const avg_x = (self.top_left.x + self.bottom_right.x) / 2;
+        const avg_y = (self.top_left.y + self.bottom_right.y) / 2;
+        return .{ .x = avg_x, .y = avg_y };
+    }
+
+    pub fn transform(self: Self, scale: f32, translate: ray.Vector2) Self {
+        const new_top_left = ray.Vector2Add(ray.Vector2Scale(self.top_left, scale), translate);
+        const new_bottom_right = ray.Vector2Add(ray.Vector2Scale(self.bottom_right, scale), translate);
+        return .{
+            .top_left = new_top_left,
+            .bottom_right = new_bottom_right,
         };
     }
 };
@@ -62,7 +79,7 @@ fn horz_wall(y: f32, x0: f32, x1: f32, config: SquareMazeConfig) rectangle {
 }
 
 // Memory is allocatored with allocator.
-fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, config: SquareMazeConfig) ![]rectangle {
+pub fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, config: SquareMazeConfig) ![]rectangle {
     var created = try std.ArrayList(rectangle).initCapacity(allocator, 4);
     errdefer created.deinit();
 
@@ -175,6 +192,21 @@ pub fn rasterize_square_maze(allocator: Allocator, maze: mazes.SquareMaze, confi
     _ = allocator;
     _ = maze;
     _ = config;
+}
+
+// Find the dimensions of a rectangle that covers everything.
+pub fn calc_extents(maze: mazes.SquareMaze, config: SquareMazeConfig) rectangle {
+    const half_width = config.cell_width / 2;
+
+    const min_x: f32 = -half_width;
+    const max_y: f32 = half_width;
+
+    const max_x: f32 = half_width + config.cell_width * @intToFloat(f32, maze.width);
+    const min_y: f32 = -half_width - config.cell_height * @intToFloat(f32, maze.height);
+    return rectangle{
+        .top_left = .{ .x = min_x, .y = max_y },
+        .bottom_right = .{ .x = max_x, .y = min_y },
+    };
 }
 
 test "Making rectangularized maze" {

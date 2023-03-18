@@ -6,6 +6,8 @@ const raster = @import("raster.zig");
 
 pub const ray = @cImport({
     @cInclude("raylib.h");
+    @cDefine("RAYMATH_IMPLEMENTATION", {});
+    @cInclude("raymath.h");
 });
 
 // Window Resolution
@@ -45,11 +47,19 @@ fn draw_loop() void {
 }
 
 pub fn main() !void {
-    // ray.InitWindow(screen_width, screen_height, "Test Window");
+    var gpa = std.heap.GeneralPurposeAllocator(.{
+        .never_unmap = true,
+        .retain_metadata = true,
+    }){};
+
+    defer std.debug.assert(!gpa.deinit());
+    const allocator = gpa.allocator();
+
+    ray.InitWindow(screen_width, screen_height, "Test Window");
     // ray.DisableEventWaiting();
 
-    // draw_fps = @intCast(usize, ray.GetMonitorRefreshRate(ray.GetCurrentMonitor()));
-    // ray.SetTargetFPS(@intCast(c_int, draw_fps));
+    draw_fps = @intCast(usize, ray.GetMonitorRefreshRate(ray.GetCurrentMonitor()));
+    ray.SetTargetFPS(@intCast(c_int, draw_fps));
 
     // const game_loop_interval_ns = time.ns_per_s /  physics_hz;
     // const draw_interval_ns = time.ns_per_s / draw_fps;
@@ -66,6 +76,39 @@ pub fn main() !void {
 
     // print("Done!\n");
     // ray.CloseWindow();
+
+    const maze = try mazes.SquareMaze.init(allocator, 5, 5);
+    defer maze.deinit();
+
+    try mazes.mazeify_graph(maze.graph, .Default, allocator);
+
+    const rects = try raster.rasterize_square_maze_rect(allocator, maze, .{});
+    defer allocator.free(rects);
+
+    const extents = raster.calc_extents(maze, .{});
+
+    // Now calculate the transform needed to move stuff to fit in the screen.
+    const maze_height = 600;
+    const window_middle: ray.Vector2 = .{ .x = screen_width / 2, .y = screen_height / 2 };
+
+    const scale_factor: f32 = @intToFloat(f32, maze_height) / extents.to_ray_rect().height;
+    const translate = ray.Vector2Subtract(window_middle, ray.Vector2Scale(extents.center(), scale_factor));
+
+    const drawn_rects = try allocator.alloc(ray.Rectangle, rects.len);
+    defer allocator.free(drawn_rects);
+
+    for (rects, drawn_rects) |maze_rect, *window_rect| {
+        window_rect.* = maze_rect.transform(scale_factor, translate).to_ray_rect();
+    }
+
+    while (!ray.WindowShouldClose()) {
+        ray.BeginDrawing();
+        ray.ClearBackground(ray.WHITE);
+        for (drawn_rects) |window_rect| {
+            ray.DrawRectangleRec(window_rect, ray.BLACK);
+        }
+        ray.EndDrawing();
+    }
 }
 
 test {

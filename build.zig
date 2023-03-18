@@ -26,8 +26,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const raylib = ralib_src.addRaylib(b, target, optimize);
-    raylib.defineCMacro("SUPPORT_CUSTOM_FRAME_CONTROL", "1");
-    
+    // raylib.defineCMacro("SUPPORT_CUSTOM_FRAME_CONTROL", "1");
     exe.linkLibrary(raylib);
     exe.addIncludePath("./src/raylib/src");
 
