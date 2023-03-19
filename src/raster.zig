@@ -11,7 +11,9 @@ pub const triangle = struct {
 };
 
 pub const rectangle = struct {
+    // Top left is minimum x,y
     top_left: ray.Vector2,
+    // Bottom right is maximum x,y
     bottom_right: ray.Vector2,
 
     const Self = @This();
@@ -21,14 +23,12 @@ pub const rectangle = struct {
             .x = self.top_left.x,
             .y = self.top_left.y,
             .width = self.bottom_right.x - self.top_left.x,
-            .height = self.top_left.y - self.bottom_right.y,
+            .height = self.bottom_right.y - self.top_left.y,
         };
     }
 
     pub fn center(self: Self) ray.Vector2 {
-        const avg_x = (self.top_left.x + self.bottom_right.x) / 2;
-        const avg_y = (self.top_left.y + self.bottom_right.y) / 2;
-        return .{ .x = avg_x, .y = avg_y };
+        return ray.Vector2Scale(ray.Vector2Add(self.top_left, self.bottom_right), 0.5);
     }
 
     pub fn transform(self: Self, scale: f32, translate: ray.Vector2) Self {
@@ -61,8 +61,8 @@ fn vert_wall(x: f32, y0: f32, y1: f32, config: SquareMazeConfig) rectangle {
     const y_min = @min(y0, y1);
     const half_width = config.wall_thickness / 2;
     return .{
-        .top_left = .{ .x = x - half_width, .y = y_max + half_width },
-        .bottom_right = .{ .x = x + half_width, .y = y_min - half_width },
+        .top_left = .{ .x = x - half_width, .y = y_min - half_width },
+        .bottom_right = .{ .x = x + half_width, .y = y_max + half_width },
     };
 }
 
@@ -73,8 +73,8 @@ fn horz_wall(y: f32, x0: f32, x1: f32, config: SquareMazeConfig) rectangle {
     const x_min = @min(x0, x1);
     const half_width = config.wall_thickness / 2;
     return .{
-        .top_left = .{ .x = x_min - half_width, .y = y + half_width },
-        .bottom_right = .{ .x = x_max + half_width, .y = y - half_width },
+        .top_left = .{ .x = x_min - half_width, .y = y - half_width },
+        .bottom_right = .{ .x = x_max + half_width, .y = y + half_width },
     };
 }
 
@@ -88,10 +88,10 @@ pub fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, 
         const total_width = config.cell_width * @intToFloat(f32, maze.width);
         const total_height = config.cell_height * @intToFloat(f32, maze.height);
         created.appendSliceAssumeCapacity(&.{
-            vert_wall(0.0, 0.0, -total_height, config), // Left
-            vert_wall(total_width, 0.0, -total_height, config), // Right
+            vert_wall(0.0, 0.0, total_height, config), // Left
+            vert_wall(total_width, 0.0, total_height, config), // Right
             horz_wall(0.0, 0.0, total_width, config), // Top
-            horz_wall(-total_height, 0.0, total_width, config), // Bottom
+            horz_wall(total_height, 0.0, total_width, config), // Bottom
         });
     }
 
@@ -115,7 +115,7 @@ pub fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, 
                     continue;
                 } else {
                     // start of new wall.
-                    wall_start = -@intToFloat(f32, row);
+                    wall_start = @intToFloat(f32, row);
                     partial_wall = true;
                     continue;
                 }
@@ -124,7 +124,7 @@ pub fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, 
                 if (partial_wall) {
                     // Complete partial wall.
                     partial_wall = false;
-                    const wall_end = -@intToFloat(f32, row);
+                    const wall_end = @intToFloat(f32, row);
                     try created.append(vert_wall(col_x, wall_start * config.cell_height, wall_end * config.cell_height, config));
                     continue;
                 } else {
@@ -135,14 +135,14 @@ pub fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, 
         }
         if (partial_wall) {
             // Complete final wall.
-            const wall_end = -@intToFloat(f32, maze.height);
+            const wall_end = @intToFloat(f32, maze.height);
             try created.append(vert_wall(col_x, wall_start * config.cell_height, wall_end * config.cell_height, config));
         }
     }
 
     // Now Horizontal walls.
     for (0..maze.height - 1) |row| {
-        const row_y = config.cell_height * -@intToFloat(f32, row + 1);
+        const row_y = config.cell_height * @intToFloat(f32, row + 1);
         // To avoid excess shapes, we consolidate walls together horizontally.
         var col: usize = 0;
         var wall_start: f32 = -0.0;
@@ -199,13 +199,13 @@ pub fn calc_extents(maze: mazes.SquareMaze, config: SquareMazeConfig) rectangle 
     const half_width = config.cell_width / 2;
 
     const min_x: f32 = -half_width;
-    const max_y: f32 = half_width;
+    const min_y: f32 = -half_width;
 
     const max_x: f32 = half_width + config.cell_width * @intToFloat(f32, maze.width);
-    const min_y: f32 = -half_width - config.cell_height * @intToFloat(f32, maze.height);
+    const max_y: f32 = half_width + config.cell_height * @intToFloat(f32, maze.height);
     return rectangle{
-        .top_left = .{ .x = min_x, .y = max_y },
-        .bottom_right = .{ .x = max_x, .y = min_y },
+        .top_left = .{ .x = min_x, .y = min_y },
+        .bottom_right = .{ .x = max_x, .y = max_y },
     };
 }
 
@@ -224,7 +224,7 @@ test "Making rectangularized maze" {
     for (rects) |rect| {
         // Basic checks to make sure rects are ordered correctly.
         try std.testing.expect(rect.top_left.x <= rect.bottom_right.x);
-        try std.testing.expect(rect.top_left.y >= rect.bottom_right.y);
+        try std.testing.expect(rect.top_left.y <= rect.bottom_right.y);
         //std.debug.print("\n[({d:.2},{d:.2}),({d:.2},{d:.2})]", .{ rect.top_left.x, rect.top_left.y, rect.bottom_right.x, rect.bottom_right.y });
     }
 }
