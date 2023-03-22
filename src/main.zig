@@ -11,8 +11,8 @@ pub const ray = @cImport({
 });
 
 // Window Resolution
-const screen_width = 1280;
-const screen_height = 720;
+const screen_width = 1920;
+const screen_height = 1080;
 
 // Physics update frequency.
 // These need to be integer multiplies
@@ -77,18 +77,19 @@ pub fn main() !void {
     // print("Done!\n");
     // ray.CloseWindow();
 
-    const maze = try mazes.SquareMaze.init(allocator, 5, 5);
+    const maze = try mazes.SquareMaze.init(allocator, 60, 60);
     defer maze.deinit();
 
     try mazes.mazeify_graph(maze.graph, .Default, allocator);
+    try mazes.mazeify_graph(maze.graph, .AddRandomEdges4Percent, allocator);
 
-    const rects = try raster.rasterize_square_maze_rect(allocator, maze, .{});
+    const rects = try raster.rasterize_square_maze_rect(allocator, maze, .{ .wall_thickness = 0.2 });
     defer allocator.free(rects);
 
     const extents = raster.calc_extents(maze, .{});
 
     // Now calculate the transform needed to move stuff to fit in the screen.
-    const maze_height = 600;
+    const maze_height = 1000;
     const window_middle: ray.Vector2 = .{ .x = screen_width / 2, .y = screen_height / 2 };
 
     const scale_factor: f32 = @intToFloat(f32, maze_height) / extents.to_ray_rect().height;

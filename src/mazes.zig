@@ -6,6 +6,8 @@ const rand = std.rand;
 pub const MazeAlgorithms = enum {
     Default,
     RecursiveBacktracker,
+    AddRandomEdges1Percent, // Adds a few more more random edges
+    AddRandomEdges4Percent, // Adds a lot more random edges
 };
 
 // A graph is mathematically a set of nodes and edges
@@ -101,9 +103,10 @@ pub const Graph = struct {
         self.adjacents[node1][self.num_adjacents(node1)] = node0;
     }
 
-    pub fn make_edges(self: Self, node0: NodeType, node1: NodeType) void {
+    pub fn make_edge(self: Self, node0: NodeType, node1: NodeType) void {
         // Note: Adds to both sides, and ensures its not a duplicate.
         if (self.is_edge(node0, node1)) return;
+        std.debug.assert(self.is_adjacent(node0, node1));
         self.edges[node0][self.num_edges(node0)] = node1;
         self.edges[node1][self.num_edges(node1)] = node0;
     }
@@ -111,7 +114,6 @@ pub const Graph = struct {
 
 // Make a maze out of a graph using an algorithm.
 // Modifies existing edges, adjacents aren't changed.
-// Starts at node 0.
 pub fn mazeify_graph(graph: Graph, algo: MazeAlgorithms, allocator: Allocator) !void {
     var seed: u64 = undefined;
     try std.os.getrandom(std.mem.asBytes(&seed));
@@ -120,6 +122,8 @@ pub fn mazeify_graph(graph: Graph, algo: MazeAlgorithms, allocator: Allocator) !
 
     switch (algo) {
         .RecursiveBacktracker, .Default => try recursive_backtracker(graph, allocator, random),
+        .AddRandomEdges1Percent => try add_new_random_edges(graph, allocator, random, 0.01),
+        .AddRandomEdges4Percent => try add_new_random_edges(graph, allocator, random, 0.04),
     }
 }
 
@@ -166,6 +170,7 @@ pub const SquareMaze = struct {
 };
 
 // Algorithms for mazes.
+// Random depth first search
 fn recursive_backtracker(graph: Graph, allocator: Allocator, random: rand.Random) !void {
     // Degenerate graph.
     std.debug.assert(graph.num_nodes != 0);
@@ -200,7 +205,7 @@ fn recursive_backtracker(graph: Graph, allocator: Allocator, random: rand.Random
             // If we have an unvisited neighbour, then randomly pick one and recurse.
             // While also carving an edge to it.
             const next_visit = unvisited_buff[random.uintLessThan(usize, num_unvisited)];
-            graph.make_edges(visiting, next_visit);
+            graph.make_edge(visiting, next_visit);
             stack.appendAssumeCapacity(next_visit);
             visited.set(next_visit);
         } else {
@@ -212,6 +217,52 @@ fn recursive_backtracker(graph: Graph, allocator: Allocator, random: rand.Random
     // For this to be a proper maze, there shouldn't be any unvisited nodes. If there are then we have a bug.
     // Or the graph is disconnected because it is not a spanning tree.
     std.debug.assert(visited.count() == visited.capacity());
+}
+
+// Adds a few new random edges, this is good to make some loops to break naive traversal algorithmns.
+// fraction is represented as a proportion of existing edges.
+fn add_new_random_edges(graph: Graph, allocator: Allocator, random: rand.Random, fraction: f32) !void {
+    const EdgePair = struct {
+        node0: Graph.NodeType,
+        node1: Graph.NodeType,
+    };
+
+    var new_potentials = std.ArrayList(EdgePair).init(allocator);
+    defer new_potentials.deinit();
+
+    var total_edges: usize = 0;
+    for (0..graph.num_nodes) |i| {
+        const node_i = @intCast(Graph.NodeType, i);
+        const i_edges = graph.get_edges(node_i);
+        const i_adjacents = graph.get_adjacents(node_i);
+        total_edges += i_edges.len;
+
+        // If something is Adjacent but NOT an edge, it is a candidate.
+        // Only add 1/2 of the edges. Since they are bidirectional.
+        // so add ones where node0 < node1.
+        for (i_adjacents) |adjacent| {
+            if ((node_i < adjacent) and !graph.is_edge(node_i, adjacent)) {
+                try new_potentials.append(.{ .node0 = node_i, .node1 = adjacent });
+            }
+        }
+    }
+    // Double counted.
+    total_edges /= 2;
+    const num_to_add = @min(new_potentials.items.len, @floatToInt(usize, @intToFloat(f32, total_edges) * fraction));
+
+    // Randomly select num_to_add.
+    for (0..num_to_add) |picking| {
+        // Randomly pick an index from picking to the end.
+        const picked_index = random.intRangeAtMost(usize, picking, new_potentials.items.len);
+        const picked = new_potentials.items[picked_index];
+
+        // Add the picked one and swap it out so it can't be picked again.
+        graph.make_edge(picked.node0, picked.node1);
+        // Swap it out.
+        new_potentials.items[picked_index] = new_potentials.items[picking];
+        // new_potentials[picking] = picked;
+        // Second half not needed since not used in next round.
+    }
 }
 
 test "Graph initialization" {
@@ -244,11 +295,11 @@ test "Graph adjacents and Edges" {
     graph.make_adjacent(1, 1);
     graph.make_adjacent(2, 1);
 
-    graph.make_edges(3, 4);
-    graph.make_edges(4, 5);
-    graph.make_edges(2, 3);
-    graph.make_edges(2, 2);
-    graph.make_edges(3, 2);
+    graph.make_edge(3, 4);
+    graph.make_edge(4, 5);
+    graph.make_edge(2, 3);
+    graph.make_edge(2, 2);
+    graph.make_edge(3, 2);
 
     try std.testing.expect(!graph.is_adjacent(1, 3));
     try std.testing.expect(graph.is_adjacent(1, 2));
