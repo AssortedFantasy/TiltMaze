@@ -39,6 +39,32 @@ pub const rectangle = struct {
             .bottom_right = new_bottom_right,
         };
     }
+
+    pub fn trianglulate(self: Self) [2]triangle {
+        // Triangles need to be CCW oriented.
+        const top_left = self.top_left;
+        const bottom_right = self.bottom_right;
+        const bottom_left = ray.Vector2{ .x = top_left.x, .y = bottom_right.y };
+        const top_right = ray.Vector2{ .x = bottom_right.x, .y = top_left.y };
+
+        const triangle1 = triangle{
+            .vertexes = .{
+                top_left,
+                bottom_left,
+                bottom_right,
+            },
+        };
+
+        const triangle2 = triangle{
+            .vertexes = .{
+                top_left,
+                bottom_right,
+                top_right,
+            },
+        };
+
+        return .{ triangle1, triangle2 };
+    }
 };
 
 pub const SquareMazeConfig = struct {
@@ -189,9 +215,15 @@ pub fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, 
 
 // Memory is allocated with allocator.
 pub fn rasterize_square_maze(allocator: Allocator, maze: mazes.SquareMaze, config: SquareMazeConfig) ![]triangle {
-    _ = allocator;
-    _ = maze;
-    _ = config;
+    const rects = try rasterize_square_maze_rect(allocator, maze, config);
+    defer allocator.free(rects);
+
+    const triangles = try allocator.alloc(triangle, 2*rects.len);
+    for (rects, 0..) |rect, i| {
+        triangles[2*i..][0..2].* = rect.trianglulate();
+    }
+
+    return triangles;
 }
 
 // Find the dimensions of a rectangle that covers everything.
@@ -211,8 +243,8 @@ pub fn calc_extents(maze: mazes.SquareMaze, config: SquareMazeConfig) rectangle 
 
 test "Making rectangularized maze" {
     const allocator = testing.allocator;
-    const width = 4;
-    const height = 4;
+    const width = 8;
+    const height = 9;
 
     const maze = try mazes.SquareMaze.init(allocator, height, width);
     defer maze.deinit();
@@ -227,4 +259,17 @@ test "Making rectangularized maze" {
         try std.testing.expect(rect.top_left.y <= rect.bottom_right.y);
         //std.debug.print("\n[({d:.2},{d:.2}),({d:.2},{d:.2})]", .{ rect.top_left.x, rect.top_left.y, rect.bottom_right.x, rect.bottom_right.y });
     }
+}
+
+test "Making triangulated maze" {
+    const allocator = testing.allocator;
+    const width = 8;
+    const height = 9;
+
+    const maze = try mazes.SquareMaze.init(allocator, height, width);
+    defer maze.deinit();
+    try mazes.mazeify_graph(maze.graph, .Default, allocator);
+
+    const triangles = try rasterize_square_maze(allocator, maze, .{});
+    defer allocator.free(triangles);
 }

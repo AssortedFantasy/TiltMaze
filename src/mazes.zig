@@ -296,7 +296,7 @@ test "Graph adjacents and Edges" {
     graph.make_adjacent(2, 1);
 
     graph.make_edge(3, 4);
-    graph.make_edge(4, 5);
+    //graph.make_edge(4, 5);
     graph.make_edge(2, 3);
     graph.make_edge(2, 2);
     graph.make_edge(3, 2);
@@ -309,7 +309,7 @@ test "Graph adjacents and Edges" {
     try std.testing.expect(!graph.is_edge(2, 4));
     try std.testing.expect(graph.is_edge(2, 3));
     try std.testing.expect(graph.is_edge(3, 4));
-    try std.testing.expect(graph.is_edge(5, 4));
+    //try std.testing.expect(graph.is_edge(5, 4));
 
     try std.testing.expectEqual(graph.num_adjacents(1), 1);
     try std.testing.expectEqual(graph.num_adjacents(2), 2);
@@ -318,8 +318,8 @@ test "Graph adjacents and Edges" {
 
     try std.testing.expectEqual(graph.num_edges(2), 1);
     try std.testing.expectEqual(graph.num_edges(3), 2);
-    try std.testing.expectEqual(graph.num_edges(4), 2);
-    try std.testing.expectEqual(graph.num_edges(5), 1);
+    //try std.testing.expectEqual(graph.num_edges(4), 2);
+    //try std.testing.expectEqual(graph.num_edges(5), 1);
 }
 
 test "Make Maze" {

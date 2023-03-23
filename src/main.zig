@@ -56,6 +56,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     ray.InitWindow(screen_width, screen_height, "Test Window");
+    ray.SetWindowState(ray.FLAG_VSYNC_HINT);
     // ray.DisableEventWaiting();
 
     draw_fps = @intCast(usize, ray.GetMonitorRefreshRate(ray.GetCurrentMonitor()));
@@ -81,7 +82,7 @@ pub fn main() !void {
     defer maze.deinit();
 
     try mazes.mazeify_graph(maze.graph, .Default, allocator);
-    try mazes.mazeify_graph(maze.graph, .AddRandomEdges4Percent, allocator);
+    try mazes.mazeify_graph(maze.graph, .AddRandomEdges1Percent, allocator);
 
     const rects = try raster.rasterize_square_maze_rect(allocator, maze, .{ .wall_thickness = 0.2 });
     defer allocator.free(rects);
