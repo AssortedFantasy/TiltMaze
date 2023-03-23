@@ -4,13 +4,29 @@ const Allocator = std.mem.Allocator;
 const mazes = @import("mazes.zig");
 const ray = @import("main.zig").ray;
 
+inline fn transform_point(p: ray.Vector2, scale: f32, translate: ray.Vector2) ray.Vector2 {
+    return ray.Vector2Add(ray.Vector2Scale(p, scale), translate);
+}
+
 // This zig file contains rasterization. I.E turning mazes into sets of triangles.
 // Also some functions to rotate and other similar features.
-pub const triangle = struct {
+pub const Triangle = struct {
     vertexes: [3]ray.Vector2,
+
+    const Self = @This();
+
+    pub fn transform(self: Self, scale: f32, translate: ray.Vector2) Self {
+        return .{
+            .vertexes = .{
+                transform_point(self.vertexes[0], scale, translate),
+                transform_point(self.vertexes[1], scale, translate),
+                transform_point(self.vertexes[2], scale, translate),
+            },
+        };
+    }
 };
 
-pub const rectangle = struct {
+pub const Rectangle = struct {
     // Top left is minimum x,y
     top_left: ray.Vector2,
     // Bottom right is maximum x,y
@@ -32,22 +48,20 @@ pub const rectangle = struct {
     }
 
     pub fn transform(self: Self, scale: f32, translate: ray.Vector2) Self {
-        const new_top_left = ray.Vector2Add(ray.Vector2Scale(self.top_left, scale), translate);
-        const new_bottom_right = ray.Vector2Add(ray.Vector2Scale(self.bottom_right, scale), translate);
         return .{
-            .top_left = new_top_left,
-            .bottom_right = new_bottom_right,
+            .top_left = transform_point(self.top_left, scale, translate),
+            .bottom_right = transform_point(self.bottom_right, scale, translate),
         };
     }
 
-    pub fn trianglulate(self: Self) [2]triangle {
+    pub fn trianglulate(self: Self) [2]Triangle {
         // Triangles need to be CCW oriented.
         const top_left = self.top_left;
         const bottom_right = self.bottom_right;
         const bottom_left = ray.Vector2{ .x = top_left.x, .y = bottom_right.y };
         const top_right = ray.Vector2{ .x = bottom_right.x, .y = top_left.y };
 
-        const triangle1 = triangle{
+        const triangle1 = Triangle{
             .vertexes = .{
                 top_left,
                 bottom_left,
@@ -55,7 +69,7 @@ pub const rectangle = struct {
             },
         };
 
-        const triangle2 = triangle{
+        const triangle2 = Triangle{
             .vertexes = .{
                 top_left,
                 bottom_right,
@@ -75,14 +89,14 @@ pub const SquareMazeConfig = struct {
     cell_height: f32 = 1.0,
 };
 
-pub fn rects_to_triangles(allocator: Allocator, rects: []const rectangle) []triangle {
+pub fn rects_to_triangles(allocator: Allocator, rects: []const Rectangle) []Triangle {
     _ = allocator;
     _ = rects;
 }
 
 // Helper function
 // Vertical wall from line
-fn vert_wall(x: f32, y0: f32, y1: f32, config: SquareMazeConfig) rectangle {
+fn vert_wall(x: f32, y0: f32, y1: f32, config: SquareMazeConfig) Rectangle {
     const y_max = @max(y0, y1);
     const y_min = @min(y0, y1);
     const half_width = config.wall_thickness / 2;
@@ -94,7 +108,7 @@ fn vert_wall(x: f32, y0: f32, y1: f32, config: SquareMazeConfig) rectangle {
 
 // Helper function
 // Horizontal wall from line
-fn horz_wall(y: f32, x0: f32, x1: f32, config: SquareMazeConfig) rectangle {
+fn horz_wall(y: f32, x0: f32, x1: f32, config: SquareMazeConfig) Rectangle {
     const x_max = @max(x0, x1);
     const x_min = @min(x0, x1);
     const half_width = config.wall_thickness / 2;
@@ -105,8 +119,8 @@ fn horz_wall(y: f32, x0: f32, x1: f32, config: SquareMazeConfig) rectangle {
 }
 
 // Memory is allocatored with allocator.
-pub fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, config: SquareMazeConfig) ![]rectangle {
-    var created = try std.ArrayList(rectangle).initCapacity(allocator, 4);
+pub fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, config: SquareMazeConfig) ![]Rectangle {
+    var created = try std.ArrayList(Rectangle).initCapacity(allocator, 4);
     errdefer created.deinit();
 
     // First 4 are the boundry walls.
@@ -214,20 +228,20 @@ pub fn rasterize_square_maze_rect(allocator: Allocator, maze: mazes.SquareMaze, 
 }
 
 // Memory is allocated with allocator.
-pub fn rasterize_square_maze(allocator: Allocator, maze: mazes.SquareMaze, config: SquareMazeConfig) ![]triangle {
+pub fn rasterize_square_maze(allocator: Allocator, maze: mazes.SquareMaze, config: SquareMazeConfig) ![]Triangle {
     const rects = try rasterize_square_maze_rect(allocator, maze, config);
     defer allocator.free(rects);
 
-    const triangles = try allocator.alloc(triangle, 2*rects.len);
+    const triangles = try allocator.alloc(Triangle, 2 * rects.len);
     for (rects, 0..) |rect, i| {
-        triangles[2*i..][0..2].* = rect.trianglulate();
+        triangles[2 * i ..][0..2].* = rect.trianglulate();
     }
 
     return triangles;
 }
 
 // Find the dimensions of a rectangle that covers everything.
-pub fn calc_extents(maze: mazes.SquareMaze, config: SquareMazeConfig) rectangle {
+pub fn calc_extents(maze: mazes.SquareMaze, config: SquareMazeConfig) Rectangle {
     const half_width = config.cell_width / 2;
 
     const min_x: f32 = -half_width;
@@ -235,7 +249,7 @@ pub fn calc_extents(maze: mazes.SquareMaze, config: SquareMazeConfig) rectangle 
 
     const max_x: f32 = half_width + config.cell_width * @intToFloat(f32, maze.width);
     const max_y: f32 = half_width + config.cell_height * @intToFloat(f32, maze.height);
-    return rectangle{
+    return Rectangle{
         .top_left = .{ .x = min_x, .y = min_y },
         .bottom_right = .{ .x = max_x, .y = max_y },
     };

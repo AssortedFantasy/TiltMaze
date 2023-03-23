@@ -11,8 +11,8 @@ pub const ray = @cImport({
 });
 
 // Window Resolution
-const screen_width = 1920;
-const screen_height = 1080;
+const screen_width = 1280;
+const screen_height = 720;
 
 // Physics update frequency.
 // These need to be integer multiplies
@@ -78,36 +78,36 @@ pub fn main() !void {
     // print("Done!\n");
     // ray.CloseWindow();
 
-    const maze = try mazes.SquareMaze.init(allocator, 60, 60);
+    const maze = try mazes.SquareMaze.init(allocator, 40, 40);
     defer maze.deinit();
 
     try mazes.mazeify_graph(maze.graph, .Default, allocator);
     try mazes.mazeify_graph(maze.graph, .AddRandomEdges1Percent, allocator);
 
-    const rects = try raster.rasterize_square_maze_rect(allocator, maze, .{ .wall_thickness = 0.2 });
-    defer allocator.free(rects);
+    const triangles = try raster.rasterize_square_maze(allocator, maze, .{ .wall_thickness = 0.2 });
+    defer allocator.free(triangles);
 
     const extents = raster.calc_extents(maze, .{});
 
     // Now calculate the transform needed to move stuff to fit in the screen.
-    const maze_height = 1000;
+    const maze_height = screen_height*9/10;
     const window_middle: ray.Vector2 = .{ .x = screen_width / 2, .y = screen_height / 2 };
 
     const scale_factor: f32 = @intToFloat(f32, maze_height) / extents.to_ray_rect().height;
     const translate = ray.Vector2Subtract(window_middle, ray.Vector2Scale(extents.center(), scale_factor));
 
-    const drawn_rects = try allocator.alloc(ray.Rectangle, rects.len);
-    defer allocator.free(drawn_rects);
+    const drawn_triangles = try allocator.alloc(raster.Triangle, triangles.len);
+    defer allocator.free(drawn_triangles);
 
-    for (rects, drawn_rects) |maze_rect, *window_rect| {
-        window_rect.* = maze_rect.transform(scale_factor, translate).to_ray_rect();
+    for (triangles, drawn_triangles) |maze_tri, *window_tri| {
+        window_tri.* = maze_tri.transform(scale_factor, translate);
     }
 
     while (!ray.WindowShouldClose()) {
         ray.BeginDrawing();
         ray.ClearBackground(ray.WHITE);
-        for (drawn_rects) |window_rect| {
-            ray.DrawRectangleRec(window_rect, ray.BLACK);
+        for (drawn_triangles) |triangle| {
+            ray.DrawTriangle(triangle.vertexes[0], triangle.vertexes[1], triangle.vertexes[2], ray.BLACK);
         }
         ray.EndDrawing();
     }
