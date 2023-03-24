@@ -3,6 +3,7 @@ const time = std.time;
 const Allocator = std.mem.Allocator;
 const mazes = @import("mazes.zig");
 const raster = @import("raster.zig");
+const physics = @import("physics.zig");
 
 pub const ray = @cImport({
     @cInclude("raylib.h");
@@ -90,7 +91,7 @@ pub fn main() !void {
     const extents = raster.calc_extents(maze, .{});
 
     // Now calculate the transform needed to move stuff to fit in the screen.
-    const maze_height = screen_height*9/10;
+    const maze_height = screen_height * 9 / 10;
     const window_middle: ray.Vector2 = .{ .x = screen_width / 2, .y = screen_height / 2 };
 
     const scale_factor: f32 = @intToFloat(f32, maze_height) / extents.to_ray_rect().height;
@@ -116,4 +117,5 @@ pub fn main() !void {
 test {
     _ = mazes;
     _ = raster;
+    _ = physics;
 }

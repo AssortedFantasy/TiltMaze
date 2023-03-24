@@ -3,9 +3,17 @@ const testing = std.testing;
 const Allocator = std.mem.Allocator;
 const mazes = @import("mazes.zig");
 const ray = @import("main.zig").ray;
+const Ball = @import("physics.zig").Ball;
 
 inline fn transform_point(p: ray.Vector2, scale: f32, translate: ray.Vector2) ray.Vector2 {
     return ray.Vector2Add(ray.Vector2Scale(p, scale), translate);
+}
+
+pub fn transform_ball(ball: Ball, scale: f32, translate: ray.Vector2) struct {center: ray.Vector2, radius: f32} {
+    return .{
+        .center = transform_point(ball.center, scale, translate),
+        .radius = ball.radius * scale,
+    };
 }
 
 // This zig file contains rasterization. I.E turning mazes into sets of triangles.
